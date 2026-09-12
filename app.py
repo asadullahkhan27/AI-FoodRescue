@@ -58,7 +58,6 @@ st.info(
 @st.cache_resource
 def load_model():
 
-```
 if not os.path.exists(MODEL_PATH):
     raise FileNotFoundError(
         f"{MODEL_PATH} not found."
