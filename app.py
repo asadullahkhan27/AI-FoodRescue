@@ -3,7 +3,7 @@ import torch
 from torch import nn
 from torchvision import models, transforms
 from PIL import Image
-from huggingface_hub import hf_hub_download
+import os
 
 
 # =========================================================
@@ -21,8 +21,7 @@ st.set_page_config(
 # CONFIGURATION
 # =========================================================
 
-MODEL_ID = "asadullahkhan27/AI-FoodRescue"
-MODEL_FILENAME = "foodrescue_model.pth"
+MODEL_PATH = "foodrescue_model.pth"
 
 
 # =========================================================
@@ -30,42 +29,58 @@ MODEL_FILENAME = "foodrescue_model.pth"
 # =========================================================
 
 st.title("🍱 AI FoodRescue")
-st.subheader("Intelligent Food Waste Reduction & Redistribution System")
+
+st.subheader(
+    "Intelligent Food Waste Reduction & Redistribution System"
+)
 
 st.write(
     """
-    AI FoodRescue analyzes the visible condition of food together with
-    storage information to provide an experimental rescue recommendation.
+    AI FoodRescue analyzes the visible condition of food
+    together with storage information to provide an
+    experimental rescue recommendation.
     """
 )
 
 st.info(
     "⚠️ This system is decision support only. "
-    "A food image cannot reliably detect all pathogens, toxins, "
-    "or microbiological hazards."
+    "A food image cannot reliably detect all pathogens, "
+    "toxins, or microbiological hazards."
 )
 
 
 # =========================================================
-# LOAD MODEL FROM HUGGING FACE
+# LOAD LOCAL MODEL
 # =========================================================
 
 @st.cache_resource
 def load_model():
 
-    # Download model from Hugging Face
-    model_path = hf_hub_download(
-        repo_id=MODEL_ID,
-        filename=MODEL_FILENAME
-    )
+    if not os.path.exists(MODEL_PATH):
+
+        raise FileNotFoundError(
+            f"Model file not found: {MODEL_PATH}"
+        )
 
     # Load checkpoint
     checkpoint = torch.load(
-        model_path,
+        MODEL_PATH,
         map_location="cpu"
     )
 
-    # Get class names
+    # Check checkpoint format
+    if "classes" not in checkpoint:
+
+        raise KeyError(
+            "The model file does not contain 'classes'."
+        )
+
+    if "model_state" not in checkpoint:
+
+        raise KeyError(
+            "The model file does not contain 'model_state'."
+        )
+
     classes = checkpoint["classes"]
 
     # Create MobileNetV2
@@ -98,7 +113,7 @@ try:
     model, classes = load_model()
 
     st.success(
-        "✅ AI FoodRescue model connected successfully!"
+        "✅ AI FoodRescue model loaded successfully!"
     )
 
 except Exception as e:
@@ -107,17 +122,12 @@ except Exception as e:
     classes = None
 
     st.error(
-        "❌ Unable to load the Hugging Face model."
+        "❌ Model could not be loaded."
     )
 
     st.code(
         str(e),
         language="text"
-    )
-
-    st.warning(
-        "Please check your Hugging Face repository, "
-        "model filename, checkpoint format, and requirements.txt."
     )
 
 
@@ -127,7 +137,9 @@ except Exception as e:
 
 transform = transforms.Compose([
     transforms.Resize((224, 224)),
+
     transforms.ToTensor(),
+
     transforms.Normalize(
         mean=[0.485, 0.456, 0.406],
         std=[0.229, 0.224, 0.225]
@@ -161,7 +173,6 @@ storage_duration = st.number_input(
     step=1
 )
 
-
 storage_location = st.selectbox(
     "Where was the food stored?",
     [
@@ -171,7 +182,6 @@ storage_location = st.selectbox(
         "Unknown"
     ]
 )
-
 
 temperature = st.number_input(
     "Approximate storage temperature (°C)",
@@ -183,12 +193,14 @@ temperature = st.number_input(
 
 
 # =========================================================
-# ANALYZE BUTTON
+# ANALYZE
 # =========================================================
 
 if uploaded_file is not None:
 
-    image = Image.open(uploaded_file).convert("RGB")
+    image = Image.open(
+        uploaded_file
+    ).convert("RGB")
 
     st.image(
         image,
@@ -205,7 +217,7 @@ if uploaded_file is not None:
 
             st.error(
                 "❌ Model is not available. "
-                "Please fix the Hugging Face model connection first."
+                "Please check the foodrescue_model.pth file."
             )
 
             st.stop()
@@ -215,16 +227,20 @@ if uploaded_file is not None:
         # PREPROCESS IMAGE
         # =================================================
 
-        input_tensor = transform(image).unsqueeze(0)
+        input_tensor = transform(
+            image
+        ).unsqueeze(0)
 
 
         # =================================================
-        # MODEL PREDICTION
+        # PREDICTION
         # =================================================
 
         with torch.no_grad():
 
-            outputs = model(input_tensor)
+            outputs = model(
+                input_tensor
+            )
 
             probabilities = torch.softmax(
                 outputs,
@@ -238,28 +254,26 @@ if uploaded_file is not None:
 
 
         confidence = confidence.item()
+
         predicted_index = predicted_index.item()
 
-        predicted_class = classes[predicted_index]
+        predicted_class = classes[
+            predicted_index
+        ]
 
 
         # =================================================
-        # CLASS PARSING
+        # PARSE CLASS
         # =================================================
 
-        class_name = predicted_class.lower().replace(
-            " ",
-            "_"
+        class_name = (
+            predicted_class
+            .lower()
+            .replace(" ", "_")
         )
 
         food_type = "Unknown"
         condition = "Unknown"
-
-
-        # Expected format:
-        # bread_acceptable
-        # bread_deteriorating
-        # bread_spoiled
 
         if "_" in class_name:
 
@@ -273,10 +287,12 @@ if uploaded_file is not None:
 
 
         # =================================================
-        # DISPLAY AI RESULT
+        # AI RESULT
         # =================================================
 
-        st.header("🤖 AI Analysis Result")
+        st.header(
+            "🤖 AI Analysis Result"
+        )
 
         col1, col2 = st.columns(2)
 
@@ -300,9 +316,9 @@ if uploaded_file is not None:
                 ).title()
             )
 
-
         st.write(
-            f"**AI Confidence:** {confidence * 100:.2f}%"
+            f"**AI Confidence:** "
+            f"{confidence * 100:.2f}%"
         )
 
         st.progress(
@@ -318,26 +334,19 @@ if uploaded_file is not None:
         recommendation = ""
 
 
-        # -----------------------------------------------
         # LOW CONFIDENCE
-        # -----------------------------------------------
-
         if confidence < 0.60:
 
             decision = "🔎 FURTHER ASSESSMENT"
 
             recommendation = (
                 "The AI confidence is low. "
-                "Do not rely on this prediction alone. "
-                "Perform a manual inspection before consuming "
-                "or redistributing the food."
+                "Perform a manual inspection before "
+                "consuming or redistributing the food."
             )
 
 
-        # -----------------------------------------------
         # SPOILED
-        # -----------------------------------------------
-
         elif condition == "spoiled":
 
             decision = "🚫 DISCARD"
@@ -349,40 +358,29 @@ if uploaded_file is not None:
             )
 
 
-        # -----------------------------------------------
         # UNKNOWN STORAGE
-        # -----------------------------------------------
-
         elif storage_location == "Unknown":
 
             decision = "🔎 FURTHER ASSESSMENT"
 
             recommendation = (
                 "Storage conditions are unknown. "
-                "Manual food-safety assessment is recommended "
-                "before making a rescue decision."
+                "Manual food-safety assessment is recommended."
             )
 
 
-        # -----------------------------------------------
         # HIGH TEMPERATURE
-        # -----------------------------------------------
-
         elif temperature >= 30:
 
             decision = "🔎 FURTHER ASSESSMENT"
 
             recommendation = (
                 "The reported storage temperature is high. "
-                "The food should undergo additional safety "
-                "assessment before consumption or redistribution."
+                "Additional safety assessment is recommended."
             )
 
 
-        # -----------------------------------------------
-        # DETERIORATING FOOD
-        # -----------------------------------------------
-
+        # DETERIORATING
         elif condition == "deteriorating":
 
             if storage_duration >= 24:
@@ -390,9 +388,8 @@ if uploaded_file is not None:
                 decision = "🔎 FURTHER ASSESSMENT"
 
                 recommendation = (
-                    "The food shows signs of deterioration and "
-                    "has been stored for an extended period. "
-                    "Manual inspection is strongly recommended."
+                    "The food shows signs of deterioration "
+                    "and has been stored for an extended period."
                 )
 
             elif storage_duration >= 12:
@@ -401,8 +398,8 @@ if uploaded_file is not None:
 
                 recommendation = (
                     "The food may be deteriorating. "
-                    "Check appearance, smell, texture, "
-                    "and storage history before using."
+                    "Check smell, texture, appearance, "
+                    "and storage history."
                 )
 
             else:
@@ -412,14 +409,11 @@ if uploaded_file is not None:
                 recommendation = (
                     "The food shows early signs of deterioration. "
                     "If it passes manual safety checks, "
-                    "consider using it soon rather than storing it longer."
+                    "consider using it soon."
                 )
 
 
-        # -----------------------------------------------
-        # ACCEPTABLE FOOD
-        # -----------------------------------------------
-
+        # ACCEPTABLE
         elif condition == "acceptable":
 
             if storage_duration >= 24:
@@ -427,8 +421,8 @@ if uploaded_file is not None:
                 decision = "🔎 FURTHER ASSESSMENT"
 
                 recommendation = (
-                    "Although the visible condition appears acceptable, "
-                    "the storage duration is long. "
+                    "The food appears visually acceptable, "
+                    "but the storage duration is long. "
                     "Perform additional safety checks."
                 )
 
@@ -438,8 +432,8 @@ if uploaded_file is not None:
 
                 recommendation = (
                     "The food appears visually acceptable, "
-                    "but storage duration warrants additional "
-                    "manual assessment."
+                    "but storage duration warrants "
+                    "additional assessment."
                 )
 
             else:
@@ -447,24 +441,22 @@ if uploaded_file is not None:
                 decision = "✅ POTENTIAL RESCUE / USE"
 
                 recommendation = (
-                    "The food appears visually acceptable and "
-                    "the reported storage duration is relatively short. "
-                    "If it passes normal smell, texture, and hygiene checks, "
+                    "The food appears visually acceptable "
+                    "and the reported storage duration "
+                    "is relatively short. "
+                    "If it passes normal safety checks, "
                     "it may be suitable for use or redistribution."
                 )
 
 
-        # -----------------------------------------------
-        # UNKNOWN CONDITION
-        # -----------------------------------------------
-
+        # UNKNOWN
         else:
 
             decision = "🔎 FURTHER ASSESSMENT"
 
             recommendation = (
-                "The food condition could not be confidently interpreted. "
-                "Manual assessment is required."
+                "The food condition could not be confidently "
+                "interpreted. Manual assessment is required."
             )
 
 
@@ -472,7 +464,9 @@ if uploaded_file is not None:
         # FINAL DECISION
         # =================================================
 
-        st.header("🎯 FoodRescue Decision")
+        st.header(
+            "🎯 FoodRescue Decision"
+        )
 
         if "DISCARD" in decision:
 
@@ -503,7 +497,9 @@ if uploaded_file is not None:
         # RECOMMENDATION
         # =================================================
 
-        st.subheader("💡 Recommendation")
+        st.subheader(
+            "💡 Recommendation"
+        )
 
         st.write(
             recommendation
@@ -511,12 +507,15 @@ if uploaded_file is not None:
 
 
         # =================================================
-        # STORAGE SUMMARY
+        # SUMMARY
         # =================================================
 
-        st.subheader("📋 Analysis Summary")
+        st.subheader(
+            "📋 Analysis Summary"
+        )
 
-        summary = f"""
+        st.markdown(
+            f"""
 **Food Type:** {food_type.replace("_", " ").title()}
 
 **Detected Condition:** {condition.replace("_", " ").title()}
@@ -531,9 +530,6 @@ if uploaded_file is not None:
 
 **Final Decision:** {decision}
 """
-
-        st.markdown(
-            summary
         )
 
 
@@ -541,31 +537,28 @@ if uploaded_file is not None:
         # SAFETY CHECKLIST
         # =================================================
 
-        st.subheader("🛡️ Manual Safety Checklist")
-
-        st.checkbox(
-            "No unusual or foul smell",
-            key="smell_check"
+        st.subheader(
+            "🛡️ Manual Safety Checklist"
         )
 
         st.checkbox(
-            "No visible mold or abnormal growth",
-            key="mold_check"
+            "No unusual or foul smell"
         )
 
         st.checkbox(
-            "No unusual texture or sliminess",
-            key="texture_check"
+            "No visible mold or abnormal growth"
         )
 
         st.checkbox(
-            "Storage container was clean and covered",
-            key="container_check"
+            "No unusual texture or sliminess"
         )
 
         st.checkbox(
-            "Food was handled hygienically",
-            key="hygiene_check"
+            "Storage container was clean and covered"
+        )
+
+        st.checkbox(
+            "Food was handled hygienically"
         )
 
 
