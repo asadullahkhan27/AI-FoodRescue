@@ -3,12 +3,12 @@ import torch
 from torch import nn
 from torchvision import models, transforms
 from PIL import Image
-import os
+from huggingface_hub import hf_hub_download
 
 
-# ============================================================
+# =========================================================
 # PAGE CONFIG
-# ============================================================
+# =========================================================
 
 st.set_page_config(
     page_title="AI FoodRescue",
@@ -17,80 +17,69 @@ st.set_page_config(
 )
 
 
-# ============================================================
+# =========================================================
 # CONFIGURATION
-# ============================================================
+# =========================================================
 
-# IMPORTANT:
-# After uploading your trained model to Hugging Face,
-# change this to:
-#
-# MODEL_ID = "YOUR_USERNAME/AI-FoodRescue"
-#
 MODEL_ID = "asadullahkhan27/AI-FoodRescue"
-
 MODEL_FILENAME = "foodrescue_model.pth"
 
 
-# ============================================================
-# HEADER
-# ============================================================
+# =========================================================
+# TITLE
+# =========================================================
 
 st.title("🍱 AI FoodRescue")
-
-st.subheader(
-    "AI-Assisted Food Rescue & Decision Support"
-)
+st.subheader("Intelligent Food Waste Reduction & Redistribution System")
 
 st.write(
     """
-    AI FoodRescue analyzes the visible condition of selected food
-    items and combines the visual assessment with storage information
-    to provide an AI-assisted recommendation.
+    AI FoodRescue analyzes the visible condition of food together with
+    storage information to provide an experimental rescue recommendation.
     """
 )
 
 st.info(
-    """
-    ⚠️ This is a decision-support prototype.
-    Image analysis cannot determine microbiological safety,
-    detect all pathogens or toxins, or guarantee that food is
-    safe to eat.
-    """
+    "⚠️ This system is decision support only. "
+    "A food image cannot reliably detect all pathogens, toxins, "
+    "or microbiological hazards."
 )
 
 
-# ============================================================
+# =========================================================
 # LOAD MODEL FROM HUGGING FACE
-# ============================================================
+# =========================================================
 
 @st.cache_resource
 def load_model():
 
-    if MODEL_ID == "YOUR_USERNAME/AI-FoodRescue":
-        return None, None
-
+    # Download model from Hugging Face
     model_path = hf_hub_download(
         repo_id=MODEL_ID,
         filename=MODEL_FILENAME
     )
 
+    # Load checkpoint
     checkpoint = torch.load(
         model_path,
         map_location="cpu"
     )
 
+    # Get class names
     classes = checkpoint["classes"]
 
+    # Create MobileNetV2
     model = models.mobilenet_v2(
         weights=None
     )
 
+    # Replace classifier
     model.classifier[1] = nn.Linear(
         model.classifier[1].in_features,
         len(classes)
     )
 
+    # Load trained weights
     model.load_state_dict(
         checkpoint["model_state"]
     )
@@ -100,9 +89,17 @@ def load_model():
     return model, classes
 
 
+# =========================================================
+# MODEL INITIALIZATION
+# =========================================================
+
 try:
 
     model, classes = load_model()
+
+    st.success(
+        "✅ AI FoodRescue model connected successfully!"
+    )
 
 except Exception as e:
 
@@ -110,21 +107,27 @@ except Exception as e:
     classes = None
 
     st.error(
-        "Unable to load the Hugging Face model."
+        "❌ Unable to load the Hugging Face model."
     )
 
-    st.code(str(e))
+    st.code(
+        str(e),
+        language="text"
+    )
+
+    st.warning(
+        "Please check your Hugging Face repository, "
+        "model filename, checkpoint format, and requirements.txt."
+    )
 
 
-# ============================================================
+# =========================================================
 # IMAGE PREPROCESSING
-# ============================================================
+# =========================================================
 
 transform = transforms.Compose([
     transforms.Resize((224, 224)),
-
     transforms.ToTensor(),
-
     transforms.Normalize(
         mean=[0.485, 0.456, 0.406],
         std=[0.229, 0.224, 0.225]
@@ -132,126 +135,99 @@ transform = transforms.Compose([
 ])
 
 
-# ============================================================
-# IMAGE UPLOAD
-# ============================================================
+# =========================================================
+# FOOD IMAGE UPLOAD
+# =========================================================
 
-st.header("1. Upload Food Image")
+st.header("📸 Food Analysis")
 
 uploaded_file = st.file_uploader(
     "Upload a food image",
-    type=[
-        "jpg",
-        "jpeg",
-        "png"
+    type=["jpg", "jpeg", "png"]
+)
+
+
+# =========================================================
+# STORAGE INFORMATION
+# =========================================================
+
+st.header("📦 Storage Information")
+
+storage_duration = st.number_input(
+    "How many hours has the food been stored?",
+    min_value=0,
+    max_value=240,
+    value=2,
+    step=1
+)
+
+
+storage_location = st.selectbox(
+    "Where was the food stored?",
+    [
+        "Refrigerator",
+        "Freezer",
+        "Room Temperature",
+        "Unknown"
     ]
 )
 
 
-if uploaded_file:
+temperature = st.number_input(
+    "Approximate storage temperature (°C)",
+    min_value=-30.0,
+    max_value=60.0,
+    value=5.0,
+    step=1.0
+)
 
-    image = Image.open(
-        uploaded_file
-    ).convert("RGB")
+
+# =========================================================
+# ANALYZE BUTTON
+# =========================================================
+
+if uploaded_file is not None:
+
+    image = Image.open(uploaded_file).convert("RGB")
 
     st.image(
         image,
-        caption="Uploaded Food",
+        caption="Uploaded Food Image",
         use_container_width=True
     )
 
-
-    # ========================================================
-    # STORAGE INFORMATION
-    # ========================================================
-
-    st.header("2. Storage Information")
-
-    storage_duration = st.selectbox(
-        "How long has the food been stored?",
-
-        [
-            "Less than 6 hours",
-            "6–12 hours",
-            "12–24 hours",
-            "More than 24 hours",
-            "Unknown"
-        ]
-    )
-
-
-    storage = st.selectbox(
-        "Where was it stored?",
-
-        [
-            "Refrigerated",
-            "Room temperature",
-            "Warm environment",
-            "Unknown"
-        ]
-    )
-
-
-    temperature = st.number_input(
-        "Approximate storage temperature (°C)",
-
-        min_value=0,
-        max_value=60,
-
-        value=25
-    )
-
-
-    # ========================================================
-    # ANALYZE BUTTON
-    # ========================================================
-
-    st.header("3. AI Analysis")
-
-    analyze = st.button(
+    if st.button(
         "🔍 Analyze Food",
-        type="primary",
         use_container_width=True
-    )
-
-
-    if analyze:
-
-        # ====================================================
-        # CHECK MODEL
-        # ====================================================
+    ):
 
         if model is None:
 
-            st.warning(
-                """
-                The Hugging Face model is not connected yet.
-                First upload your trained
-                `foodrescue_model.pth` model to Hugging Face
-                and update MODEL_ID in app.py.
-                """
+            st.error(
+                "❌ Model is not available. "
+                "Please fix the Hugging Face model connection first."
             )
 
             st.stop()
 
 
-        # ====================================================
+        # =================================================
+        # PREPROCESS IMAGE
+        # =================================================
+
+        input_tensor = transform(image).unsqueeze(0)
+
+
+        # =================================================
         # MODEL PREDICTION
-        # ====================================================
-
-        input_tensor = transform(
-            image
-        ).unsqueeze(0)
-
+        # =================================================
 
         with torch.no_grad():
 
-            output = model(
-                input_tensor
-            )
+            outputs = model(input_tensor)
 
             probabilities = torch.softmax(
-                output,
+                outputs,
                 dim=1
             )
 
@@ -262,283 +238,348 @@ if uploaded_file:
 
 
         confidence = confidence.item()
+        predicted_index = predicted_index.item()
+
+        predicted_class = classes[predicted_index]
 
 
-        predicted_class = classes[
-            predicted_index.item()
-        ]
+        # =================================================
+        # CLASS PARSING
+        # =================================================
+
+        class_name = predicted_class.lower().replace(
+            " ",
+            "_"
+        )
+
+        food_type = "Unknown"
+        condition = "Unknown"
 
 
-        # ====================================================
-        # EXTRACT FOOD + CONDITION
-        # ====================================================
+        # Expected format:
+        # bread_acceptable
+        # bread_deteriorating
+        # bread_spoiled
 
-        parts = predicted_class.split("_")
+        if "_" in class_name:
 
-
-        if len(parts) >= 2:
-
-            condition = parts[-1]
-
-            food_type = "_".join(
-                parts[:-1]
+            parts = class_name.rsplit(
+                "_",
+                1
             )
 
-        else:
-
-            food_type = "unknown"
-
-            condition = "unknown"
+            food_type = parts[0]
+            condition = parts[1]
 
 
-        # ====================================================
-        # DISPLAY AI RESULTS
-        # ====================================================
+        # =================================================
+        # DISPLAY AI RESULT
+        # =================================================
 
-        st.divider()
-
-        st.header("AI Visual Analysis")
-
+        st.header("🤖 AI Analysis Result")
 
         col1, col2 = st.columns(2)
-
 
         with col1:
 
             st.metric(
-                "Food Category",
-                food_type.capitalize()
+                "Food Type",
+                food_type.replace(
+                    "_",
+                    " "
+                ).title()
             )
-
 
         with col2:
 
             st.metric(
-                "Visible Condition",
-                condition.capitalize()
+                "Condition",
+                condition.replace(
+                    "_",
+                    " "
+                ).title()
             )
 
 
         st.write(
-            f"**AI Confidence:** "
-            f"{confidence * 100:.1f}%"
+            f"**AI Confidence:** {confidence * 100:.2f}%"
+        )
+
+        st.progress(
+            min(confidence, 1.0)
         )
 
 
-        # ====================================================
+        # =================================================
         # DECISION ENGINE
-        # ====================================================
+        # =================================================
+
+        decision = ""
+        recommendation = ""
+
+
+        # -----------------------------------------------
+        # LOW CONFIDENCE
+        # -----------------------------------------------
 
         if confidence < 0.60:
 
-            decision = "FURTHER ASSESSMENT"
+            decision = "🔎 FURTHER ASSESSMENT"
 
-            reason = (
-                "The AI model has relatively low confidence "
-                "in its visual classification."
+            recommendation = (
+                "The AI confidence is low. "
+                "Do not rely on this prediction alone. "
+                "Perform a manual inspection before consuming "
+                "or redistributing the food."
             )
 
+
+        # -----------------------------------------------
+        # SPOILED
+        # -----------------------------------------------
 
         elif condition == "spoiled":
 
-            decision = "DISCARD"
+            decision = "🚫 DISCARD"
 
-            reason = (
-                "The image was classified as visibly spoiled. "
-                "The system does not recommend rescue based "
-                "on visual appearance."
+            recommendation = (
+                "The AI detected visible characteristics "
+                "associated with spoiled food. "
+                "Do not redistribute or consume it."
             )
 
 
-        elif storage == "Unknown":
+        # -----------------------------------------------
+        # UNKNOWN STORAGE
+        # -----------------------------------------------
 
-            decision = "FURTHER ASSESSMENT"
+        elif storage_location == "Unknown":
 
-            reason = (
+            decision = "🔎 FURTHER ASSESSMENT"
+
+            recommendation = (
                 "Storage conditions are unknown. "
-                "Additional food-safety assessment is required."
+                "Manual food-safety assessment is recommended "
+                "before making a rescue decision."
             )
 
+
+        # -----------------------------------------------
+        # HIGH TEMPERATURE
+        # -----------------------------------------------
 
         elif temperature >= 30:
 
-            decision = "FURTHER ASSESSMENT"
+            decision = "🔎 FURTHER ASSESSMENT"
 
-            reason = (
-                "The reported storage temperature is elevated. "
-                "Additional food-safety assessment is required."
+            recommendation = (
+                "The reported storage temperature is high. "
+                "The food should undergo additional safety "
+                "assessment before consumption or redistribution."
             )
 
+
+        # -----------------------------------------------
+        # DETERIORATING FOOD
+        # -----------------------------------------------
 
         elif condition == "deteriorating":
 
-            if storage_duration in [
-                "12–24 hours",
-                "More than 24 hours"
-            ]:
+            if storage_duration >= 24:
 
-                decision = "FURTHER ASSESSMENT"
+                decision = "🔎 FURTHER ASSESSMENT"
 
-                reason = (
-                    "Visible deterioration combined with "
-                    "extended storage requires further assessment."
+                recommendation = (
+                    "The food shows signs of deterioration and "
+                    "has been stored for an extended period. "
+                    "Manual inspection is strongly recommended."
+                )
+
+            elif storage_duration >= 12:
+
+                decision = "🔎 FURTHER ASSESSMENT"
+
+                recommendation = (
+                    "The food may be deteriorating. "
+                    "Check appearance, smell, texture, "
+                    "and storage history before using."
                 )
 
             else:
 
-                decision = "USE SOON"
+                decision = "⚠️ USE SOON"
 
-                reason = (
-                    "Visible deterioration was detected. "
-                    "Prioritize use only if applicable "
-                    "food-safety requirements are satisfied."
+                recommendation = (
+                    "The food shows early signs of deterioration. "
+                    "If it passes manual safety checks, "
+                    "consider using it soon rather than storing it longer."
                 )
 
+
+        # -----------------------------------------------
+        # ACCEPTABLE FOOD
+        # -----------------------------------------------
 
         elif condition == "acceptable":
 
-            if storage_duration in [
-                "12–24 hours",
-                "More than 24 hours"
-            ]:
+            if storage_duration >= 24:
 
-                decision = "FURTHER ASSESSMENT"
+                decision = "🔎 FURTHER ASSESSMENT"
 
-                reason = (
+                recommendation = (
+                    "Although the visible condition appears acceptable, "
+                    "the storage duration is long. "
+                    "Perform additional safety checks."
+                )
+
+            elif storage_duration >= 12:
+
+                decision = "🔎 FURTHER ASSESSMENT"
+
+                recommendation = (
                     "The food appears visually acceptable, "
-                    "but extended storage requires additional "
-                    "assessment."
+                    "but storage duration warrants additional "
+                    "manual assessment."
                 )
 
             else:
 
-                decision = "POTENTIAL RESCUE / USE"
+                decision = "✅ POTENTIAL RESCUE / USE"
 
-                reason = (
-                    "No obvious visible spoilage was detected. "
-                    "Verify applicable food-safety requirements "
-                    "before use or redistribution."
+                recommendation = (
+                    "The food appears visually acceptable and "
+                    "the reported storage duration is relatively short. "
+                    "If it passes normal smell, texture, and hygiene checks, "
+                    "it may be suitable for use or redistribution."
                 )
 
 
+        # -----------------------------------------------
+        # UNKNOWN CONDITION
+        # -----------------------------------------------
+
         else:
 
-            decision = "FURTHER ASSESSMENT"
+            decision = "🔎 FURTHER ASSESSMENT"
 
-            reason = (
-                "The system could not confidently determine "
-                "the food condition."
+            recommendation = (
+                "The food condition could not be confidently interpreted. "
+                "Manual assessment is required."
             )
 
 
-        # ====================================================
-        # RECOMMENDATION
-        # ====================================================
+        # =================================================
+        # FINAL DECISION
+        # =================================================
 
-        st.divider()
+        st.header("🎯 FoodRescue Decision")
 
-        st.header(
-            "FoodRescue Recommendation"
-        )
-
-
-        if decision == "DISCARD":
+        if "DISCARD" in decision:
 
             st.error(
-                f"### ❌ {decision}"
+                f"### {decision}"
             )
 
-
-        elif decision == "FURTHER ASSESSMENT":
+        elif "FURTHER" in decision:
 
             st.warning(
-                f"### ⚠️ {decision}"
+                f"### {decision}"
             )
 
-
-        elif decision == "USE SOON":
+        elif "USE SOON" in decision:
 
             st.warning(
-                f"### ⏱️ {decision}"
+                f"### {decision}"
             )
-
 
         else:
 
             st.success(
-                f"### ✅ {decision}"
+                f"### {decision}"
             )
 
 
-        st.write(
-            f"**Reason:** {reason}"
-        )
+        # =================================================
+        # RECOMMENDATION
+        # =================================================
 
-
-        # ====================================================
-        # ASSESSMENT SUMMARY
-        # ====================================================
-
-        st.divider()
-
-        st.subheader(
-            "Assessment Summary"
-        )
-
+        st.subheader("💡 Recommendation")
 
         st.write(
-            f"**Food:** "
-            f"{food_type.capitalize()}"
+            recommendation
         )
 
 
-        st.write(
-            f"**Visible Condition:** "
-            f"{condition.capitalize()}"
+        # =================================================
+        # STORAGE SUMMARY
+        # =================================================
+
+        st.subheader("📋 Analysis Summary")
+
+        summary = f"""
+**Food Type:** {food_type.replace("_", " ").title()}
+
+**Detected Condition:** {condition.replace("_", " ").title()}
+
+**AI Confidence:** {confidence * 100:.2f}%
+
+**Storage Duration:** {storage_duration} hours
+
+**Storage Location:** {storage_location}
+
+**Temperature:** {temperature} °C
+
+**Final Decision:** {decision}
+"""
+
+        st.markdown(
+            summary
         )
 
 
-        st.write(
-            f"**Storage:** "
-            f"{storage}"
+        # =================================================
+        # SAFETY CHECKLIST
+        # =================================================
+
+        st.subheader("🛡️ Manual Safety Checklist")
+
+        st.checkbox(
+            "No unusual or foul smell",
+            key="smell_check"
+        )
+
+        st.checkbox(
+            "No visible mold or abnormal growth",
+            key="mold_check"
+        )
+
+        st.checkbox(
+            "No unusual texture or sliminess",
+            key="texture_check"
+        )
+
+        st.checkbox(
+            "Storage container was clean and covered",
+            key="container_check"
+        )
+
+        st.checkbox(
+            "Food was handled hygienically",
+            key="hygiene_check"
         )
 
 
-        st.write(
-            f"**Duration:** "
-            f"{storage_duration}"
-        )
+# =========================================================
+# FOOTER
+# =========================================================
 
+st.divider()
 
-        st.write(
-            f"**Temperature:** "
-            f"{temperature} °C"
-        )
+st.caption(
+    "🍱 AI FoodRescue | Intelligent Food Waste Reduction & Redistribution"
+)
 
-
-        st.write(
-            f"**AI Confidence:** "
-            f"{confidence * 100:.1f}%"
-        )
-
-
-        st.write(
-            f"**Recommendation:** "
-            f"{decision}"
-        )
-
-
-        # ====================================================
-        # DISCLAIMER
-        # ====================================================
-
-        st.divider()
-
-        st.caption(
-            """
-            AI FoodRescue is an experimental decision-support system.
-            Image analysis cannot detect all pathogens, toxins, or
-            food-safety hazards. Always follow established food-safety
-            procedures and applicable regulations.
-            """
-        )
+st.caption(
+    "⚠️ Experimental decision-support system. "
+    "AI predictions should not replace professional food-safety guidance."
+)
