@@ -28,7 +28,7 @@ st.set_page_config(
 #
 # MODEL_ID = "YOUR_USERNAME/AI-FoodRescue"
 #
-MODEL_ID = "YOUR_USERNAME/AI-FoodRescue"
+MODEL_ID = "asadullahkhan27/AI-FoodRescue"
 
 MODEL_FILENAME = "foodrescue_model.pth"
 
