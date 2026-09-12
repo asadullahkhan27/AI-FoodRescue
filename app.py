@@ -1,9 +1,9 @@
+import os
 import streamlit as st
 import torch
 from torch import nn
 from torchvision import models, transforms
 from PIL import Image
-import os
 
 # =========================================================
 
@@ -19,12 +19,11 @@ layout="centered"
 
 # =========================================================
 
-# CONFIGURATION
+# CONFIG
 
 # =========================================================
 
 MODEL_PATH = "foodrescue_model.pth"
-
 CONFIDENCE_THRESHOLD = 0.60
 
 # =========================================================
@@ -40,21 +39,19 @@ st.subheader(
 )
 
 st.write(
-"""
-AI FoodRescue analyzes the visible condition of food
-together with storage information to generate an
-experimental food-rescue recommendation.
-"""
+"AI FoodRescue analyzes visible food condition "
+"together with storage information to provide "
+"an experimental rescue recommendation."
 )
 
 st.info(
-"⚠️ Decision-support only: an image cannot reliably "
+"⚠️ Decision-support only. An image cannot reliably "
 "detect all pathogens, toxins, or microbiological hazards."
 )
 
 # =========================================================
 
-# LOAD LOCAL .PTH MODEL
+# LOAD MODEL
 
 # =========================================================
 
@@ -64,7 +61,7 @@ def load_model():
 ```
 if not os.path.exists(MODEL_PATH):
     raise FileNotFoundError(
-        f"{MODEL_PATH} was not found in the project folder."
+        f"{MODEL_PATH} not found."
     )
 
 checkpoint = torch.load(
@@ -74,24 +71,20 @@ checkpoint = torch.load(
 
 if not isinstance(checkpoint, dict):
     raise ValueError(
-        "Invalid model checkpoint format."
+        "Invalid model checkpoint."
     )
 
 if "model_state" not in checkpoint:
     raise KeyError(
-        "The model file does not contain 'model_state'."
+        "Missing 'model_state' in model file."
     )
 
 if "classes" not in checkpoint:
     raise KeyError(
-        "The model file does not contain 'classes'."
+        "Missing 'classes' in model file."
     )
 
 classes = checkpoint["classes"]
-
-# -----------------------------------------------------
-# MobileNetV2
-# -----------------------------------------------------
 
 model = models.mobilenet_v2(
     weights=None
@@ -113,7 +106,7 @@ return model, classes
 
 # =========================================================
 
-# MODEL INITIALIZATION
+# INITIALIZE MODEL
 
 # =========================================================
 
@@ -121,8 +114,6 @@ try:
 
 ```
 model, classes = load_model()
-
-model_available = True
 
 st.success(
     "✅ AI FoodRescue model loaded successfully!"
@@ -134,8 +125,6 @@ except Exception as e:
 ```
 model = None
 classes = None
-
-model_available = False
 
 st.error(
     "❌ AI model could not be loaded."
@@ -149,34 +138,17 @@ st.code(
 
 # =========================================================
 
-# IMAGE PREPROCESSING
+# IMAGE TRANSFORM
 
 # =========================================================
 
 transform = transforms.Compose([
-
-```
-transforms.Resize(
-    (224, 224)
-),
-
+transforms.Resize((224, 224)),
 transforms.ToTensor(),
-
 transforms.Normalize(
-    mean=[
-        0.485,
-        0.456,
-        0.406
-    ],
-
-    std=[
-        0.229,
-        0.224,
-        0.225
-    ]
+mean=[0.485, 0.456, 0.406],
+std=[0.229, 0.224, 0.225]
 )
-```
-
 ])
 
 # =========================================================
@@ -189,11 +161,7 @@ st.header("📸 Food Analysis")
 
 uploaded_file = st.file_uploader(
 "Upload a food image",
-type=[
-"jpg",
-"jpeg",
-"png"
-]
+type=["jpg", "jpeg", "png"]
 )
 
 # =========================================================
@@ -232,27 +200,16 @@ step=1.0
 
 # =========================================================
 
-# ANALYSIS
+# IMAGE DISPLAY
 
 # =========================================================
 
 if uploaded_file is not None:
 
 ```
-try:
-
-    image = Image.open(
-        uploaded_file
-    ).convert("RGB")
-
-except Exception:
-
-    st.error(
-        "❌ Could not read the uploaded image."
-    )
-
-    st.stop()
-
+image = Image.open(
+    uploaded_file
+).convert("RGB")
 
 st.image(
     image,
@@ -261,13 +218,17 @@ st.image(
 )
 
 
+# =====================================================
+# ANALYZE BUTTON
+# =====================================================
+
 if st.button(
     "🔍 Analyze Food",
     use_container_width=True,
     type="primary"
 ):
 
-    if not model_available:
+    if model is None:
 
         st.error(
             "❌ Model is unavailable. "
@@ -279,7 +240,7 @@ if st.button(
 
 
     # =================================================
-    # AI IMAGE ANALYSIS
+    # AI PREDICTION
     # =================================================
 
     with st.spinner(
@@ -306,35 +267,29 @@ if st.button(
                 dim=1
             )
 
+
     confidence = confidence.item()
 
     predicted_index = predicted_index.item()
 
-    predicted_class = classes[
-        predicted_index
-    ]
+    predicted_class = str(
+        classes[predicted_index]
+    )
 
 
     # =================================================
-    # PARSE FOOD CLASS
+    # PARSE CLASS
     # =================================================
 
     class_name = (
-        str(predicted_class)
+        predicted_class
         .lower()
         .strip()
         .replace(" ", "_")
     )
 
     food_type = "Unknown"
-
     condition = "Unknown"
-
-
-    # Expected:
-    # bread_acceptable
-    # bread_deteriorating
-    # bread_spoiled
 
     known_conditions = [
         "acceptable",
@@ -358,7 +313,7 @@ if st.button(
 
 
     # =================================================
-    # RESULT
+    # AI RESULT
     # =================================================
 
     st.divider()
@@ -382,13 +337,9 @@ if st.button(
     with col2:
 
         st.metric(
-            "🔬 Visible Condition",
-            condition.replace(
-                "_",
-                " "
-            ).title()
+            "🔬 Condition",
+            condition.title()
         )
-
 
     st.write(
         f"**AI Confidence: "
@@ -396,23 +347,13 @@ if st.button(
     )
 
     st.progress(
-        min(
-            max(
-                confidence,
-                0.0
-            ),
-            1.0
-        )
+        min(max(confidence, 0.0), 1.0)
     )
 
 
     # =================================================
-    # AI ANALYTICS
+    # CONFIDENCE ANALYSIS
     # =================================================
-
-    st.subheader(
-        "📊 AI Analytics"
-    )
 
     if confidence >= 0.80:
 
@@ -432,6 +373,9 @@ if st.button(
             "🔴 Low confidence"
         )
 
+    st.subheader(
+        "📊 AI Analytics"
+    )
 
     st.write(
         f"**Prediction Status:** "
@@ -440,7 +384,7 @@ if st.button(
 
 
     # =================================================
-    # STORAGE ANALYTICS
+    # STORAGE ANALYSIS
     # =================================================
 
     if storage_location == "Refrigerator":
@@ -467,7 +411,6 @@ if st.button(
             "🔴 Unknown storage conditions"
         )
 
-
     st.write(
         f"**Storage Analysis:** "
         f"{storage_status}"
@@ -492,129 +435,85 @@ if st.button(
     recommendation = ""
 
 
-    # -------------------------------------------------
-    # LOW CONFIDENCE
-    # -------------------------------------------------
-
     if confidence < CONFIDENCE_THRESHOLD:
 
-        decision = (
-            "🔎 FURTHER ASSESSMENT"
-        )
+        decision = "🔎 FURTHER ASSESSMENT"
 
         recommendation = (
-            "The AI prediction has low confidence. "
-            "Do not rely on the AI result alone. "
-            "Perform a manual food-safety assessment."
+            "The AI confidence is low. "
+            "Perform manual food-safety assessment."
         )
 
-
-    # -------------------------------------------------
-    # SPOILED
-    # -------------------------------------------------
 
     elif condition == "spoiled":
 
-        decision = (
-            "🚫 DISCARD"
-        )
+        decision = "🚫 DISCARD"
 
         recommendation = (
             "The model detected visible characteristics "
             "associated with spoiled food. "
-            "It should not be considered for redistribution "
-            "based on this visual assessment."
+            "Do not consume or redistribute based solely "
+            "on this AI result."
         )
 
-
-    # -------------------------------------------------
-    # UNKNOWN STORAGE
-    # -------------------------------------------------
 
     elif storage_location == "Unknown":
 
-        decision = (
-            "🔎 FURTHER ASSESSMENT"
-        )
+        decision = "🔎 FURTHER ASSESSMENT"
 
         recommendation = (
             "Storage history is unknown. "
-            "The food requires additional manual "
-            "food-safety assessment."
+            "Additional manual assessment is required."
         )
 
-
-    # -------------------------------------------------
-    # HIGH TEMPERATURE
-    # -------------------------------------------------
 
     elif temperature >= 30:
 
-        decision = (
-            "🔎 FURTHER ASSESSMENT"
-        )
+        decision = "🔎 FURTHER ASSESSMENT"
 
         recommendation = (
             "The reported storage temperature is high. "
-            "Additional safety assessment is required."
+            "Additional safety assessment is recommended."
         )
 
-
-    # -------------------------------------------------
-    # DETERIORATING
-    # -------------------------------------------------
 
     elif condition == "deteriorating":
 
         if storage_duration >= 24:
 
-            decision = (
-                "🔎 FURTHER ASSESSMENT"
-            )
+            decision = "🔎 FURTHER ASSESSMENT"
 
             recommendation = (
                 "The food shows visible signs of deterioration "
-                "and has been stored for an extended period. "
-                "Manual assessment is strongly recommended."
+                "and has been stored for an extended period."
             )
 
         elif storage_duration >= 12:
 
-            decision = (
-                "🔎 FURTHER ASSESSMENT"
-            )
+            decision = "🔎 FURTHER ASSESSMENT"
 
             recommendation = (
                 "The food may be deteriorating. "
-                "Check smell, texture, appearance, "
-                "storage history, and handling conditions."
+                "Check smell, texture, appearance and "
+                "storage history."
             )
 
         else:
 
-            decision = (
-                "⚠️ USE SOON"
-            )
+            decision = "⚠️ USE SOON"
 
             recommendation = (
                 "The food shows early visible signs of "
                 "deterioration. If it passes normal safety "
-                "checks, consider using it soon rather than "
-                "allowing further waste."
+                "checks, consider using it soon."
             )
 
-
-    # -------------------------------------------------
-    # ACCEPTABLE
-    # -------------------------------------------------
 
     elif condition == "acceptable":
 
         if storage_duration >= 24:
 
-            decision = (
-                "🔎 FURTHER ASSESSMENT"
-            )
+            decision = "🔎 FURTHER ASSESSMENT"
 
             recommendation = (
                 "The food appears visually acceptable, "
@@ -624,9 +523,7 @@ if st.button(
 
         elif storage_duration >= 12:
 
-            decision = (
-                "🔎 FURTHER ASSESSMENT"
-            )
+            decision = "🔎 FURTHER ASSESSMENT"
 
             recommendation = (
                 "The food appears visually acceptable, "
@@ -636,9 +533,7 @@ if st.button(
 
         else:
 
-            decision = (
-                "✅ POTENTIAL RESCUE / USE"
-            )
+            decision = "✅ POTENTIAL RESCUE / USE"
 
             recommendation = (
                 "The food appears visually acceptable and "
@@ -648,19 +543,13 @@ if st.button(
             )
 
 
-    # -------------------------------------------------
-    # UNKNOWN CONDITION
-    # -------------------------------------------------
-
     else:
 
-        decision = (
-            "🔎 FURTHER ASSESSMENT"
-        )
+        decision = "🔎 FURTHER ASSESSMENT"
 
         recommendation = (
-            "The food condition could not be interpreted "
-            "confidently. Manual assessment is required."
+            "The food condition could not be confidently "
+            "interpreted. Manual assessment is required."
         )
 
 
@@ -673,7 +562,6 @@ if st.button(
     st.header(
         "🎯 FoodRescue Decision"
     )
-
 
     if "DISCARD" in decision:
 
@@ -714,7 +602,7 @@ if st.button(
 
 
     # =================================================
-    # ANALYSIS SUMMARY
+    # SUMMARY
     # =================================================
 
     st.subheader(
@@ -725,35 +613,27 @@ if st.button(
         f"""
 ```
 
-**🍱 Food Type:**
-{food_type.replace("_", " ").title()}
+**🍱 Food Type:** {food_type.replace("_", " ").title()}
 
-**🔬 Detected Visible Condition:**
-{condition.replace("_", " ").title()}
+**🔬 Detected Condition:** {condition.title()}
 
-**🤖 AI Confidence:**
-{confidence * 100:.2f}%
+**🤖 AI Confidence:** {confidence * 100:.2f}%
 
-**📦 Storage Duration:**
-{storage_duration} hours
+**📦 Storage Duration:** {storage_duration} hours
 
-**🌡️ Temperature:**
-{temperature} °C
+**📍 Storage Location:** {storage_location}
 
-**📍 Storage Location:**
-{storage_location}
+**🌡️ Temperature:** {temperature} °C
 
-**📊 Prediction Status:**
-{confidence_status}
+**📊 Prediction Status:** {confidence_status}
 
-**🎯 Final Decision:**
-{decision}
+**🎯 Final Decision:** {decision}
 """
 )
 
 ```
     # =================================================
-    # MANUAL SAFETY CHECKLIST
+    # SAFETY CHECKLIST
     # =================================================
 
     st.subheader(
@@ -780,7 +660,6 @@ if st.button(
         "Food was handled hygienically"
     )
 
-
     checklist_score = sum([
         smell_ok,
         mold_ok,
@@ -789,10 +668,9 @@ if st.button(
         hygiene_ok
     ])
 
-
     st.write(
-        f"**Safety checklist completed:** "
-        f"{checklist_score}/5"
+        f"**Checklist:** "
+        f"{checklist_score}/5 completed"
     )
 
 
@@ -805,7 +683,7 @@ if st.button(
     elif checklist_score > 0:
 
         st.warning(
-            "⚠️ Some safety checks are still incomplete."
+            "⚠️ Some checklist items are incomplete."
         )
 
     else:
@@ -816,23 +694,23 @@ if st.button(
 
 
     # =================================================
-    # IMPORTANT DISCLAIMER
+    # DISCLAIMER
     # =================================================
 
     st.warning(
         """
-        ⚠️ IMPORTANT
-
-        AI FoodRescue is an experimental decision-support
-        system. Visual AI cannot determine every food-safety
-        hazard, including pathogens, toxins, contamination,
-        or unsafe handling history.
-
-        Do not use this system as a substitute for professional
-        food-safety guidance.
-        """
-    )
 ```
+
+⚠️ IMPORTANT
+
+AI FoodRescue is an experimental decision-support system.
+Visual AI cannot determine every food-safety hazard, including
+pathogens, toxins, contamination, or unsafe handling history.
+
+Do not use this system as a substitute for professional
+food-safety guidance.
+"""
+)
 
 # =========================================================
 
